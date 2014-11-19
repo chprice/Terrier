@@ -11,9 +11,11 @@ The collection agent captures all packets entering a system, and logs relevant i
 - Time arrived
 - Time to live
 - ~~Result of Snort check for malicious packets (assuming this does not slow down too far)~~
+
 Once the collection agent has reached a threshold, either n packets entering the collection agent or n seconds passing by, the collection agent will create a set of unique source address from the packets it has collected. For each unique source address, it places a job in to the detection agent’s queue.
 
 The detection agent pulls jobs off its queue, and pulls all related packets from the database for the source address. It then calculates several features about the packet data, and enters those features into the neural net for classification. These features are:
+
 1. Seen subnet scan before
 2. Number of irregular ports (not traditionally running services)
 3. Average time between different ports
@@ -38,14 +40,14 @@ We will measure the effectiveness by examining the rate at which we get false po
 
 # External Links
 
-# Libraries:
+### Libraries:
 http://www.pybrain.org/docs/
 http://scikit-learn.org/stable/
 http://www.rabbitmq.com/
 
-#Data:
+### Data:
 http://www.ll.mit.edu/mission/communications/cyber/CSTcorpora/ideval/data/1999data.html
 
-#Papers:
+### Papers:
 https://media.blackhat.com/bh-us-10/whitepapers/Engebretson_Pauli_Cronin/BlackHat-USA-2010-Engebretson-Pauli-Cronin-SprayPAL-wp.pdf
 http://www.dsu.edu/research/ia/documents/%5B15%5D-Attack-Traffic-Libraries-for-Testing-and-Teaching-Intrusion-Detection-Systems.pdf

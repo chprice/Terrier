@@ -13,6 +13,10 @@ from pybrain.structure import TanhLayer
 from pybrain.supervised.trainers import BackpropTrainer
 from pybrain.datasets import SupervisedDataSet
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine.url import URL
+
 # Wrapper around the pybrain Neural Net. Provides methods to import/export a neual net
 #  and train or classify the neural net.
 class NeuralNet:
@@ -122,7 +126,11 @@ class Aggregator:
 
 # Connection wraps the sqlalchemy connection and provides methods to fetch packets.
 class Connection:
-    def __init__(self, db_name, db_port, table_name)
+    def __init__(self, db_user, db_password, db_host, db_port table_name):
+        url = URL(drivername, username=db_user, password=db_password, host=db_host, port=db_port, database=table_name)
+        #Session = sessionmaker(bind=create_engine('mysql://'+user+':'+password+'@'+db_name+'/'+table_name))
+        Session = sessionmaker(bind=create_engine(url))
+        self.session = Session()
     def getPackets(self, ip_address)
     def getPacketsBounded(self, ip_address, start_id, end_id)
 

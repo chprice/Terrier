@@ -29,8 +29,8 @@ class NeuralNet:
         self.net = buildNetwork(7, 21, 2, hiddenclass=TanhLayer) # This really needs to get evaluated
         #I'm also officially defining [1,0] as scan, [0,1] as clean. aka [scan, clean]
         
-    def __str__(self)
-    def __repr__(self)
+    #def __str__(self)
+    #def __repr__(self)
     
     def importFromFile(self, filename):
         self.net = pickle.load(open(filename))
@@ -77,7 +77,7 @@ class NeuralNet:
 # Aggregator serves as a utility class to help convert raw packet data into useful metrics for the neural net.
 # It provides each metric as an individual function. To get all metrics, use the aggregate() method.
 class Aggregator:
-    def __init__(self)
+    #def __init__(self)
     def aggregate(self, packets):
         traits = dict()
         
@@ -132,7 +132,7 @@ class Aggregator:
 
 # Connection wraps the sqlalchemy connection and provides methods to fetch packets.
 class Connection:
-    def __init__(self, db_user, db_password, db_host, db_port table_name):
+    def __init__(self, db_user, db_password, db_host, db_port, table_name):
         url = URL(drivername, username=db_user, password=db_password, host=db_host, port=db_port, database=table_name)
         #Session = sessionmaker(bind=create_engine('mysql://'+user+':'+password+'@'+db_name+'/'+table_name))
         Session = sessionmaker(bind=create_engine(url))
@@ -141,5 +141,5 @@ class Connection:
     def getPackets(self, ip_address):
         return self.session.query(Packet).filter_by(ip=ip_address).order_by(Packet.time).all()
     
-    def getPacketsBounded(self, ip_address, start_id, end_id)
-        return self.session.query(Packet).filter_by(ip=ip_address, id >= start_id, id <= end_id).all()
+    def getPacketsBounded(self, ip_address, start_id, end_id):
+        return self.session.query(Packet).filter(Packet.ip == ip_address, Packet.id >= start_id, Packet.id <= end_id).order_by(Packet.time).all()

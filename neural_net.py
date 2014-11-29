@@ -16,6 +16,9 @@ from pybrain.datasets import SupervisedDataSet
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine.url import URL
+from sqlalchemy import between
+
+from db_schema import Packet
 
 # Wrapper around the pybrain Neural Net. Provides methods to import/export a neual net
 #  and train or classify the neural net.
@@ -34,7 +37,10 @@ class NeuralNet:
         
     def exportToFile(self, filename):
         pickle.dump(self.net, open(filename))
-        
+
+    def checkScan(self, ip_address):
+        return self.classify(self.aggregator.aggregate(self.connection.getPackets(ip_address)))
+    
     def classify(self, traits):
         output = self.net.activate(traits.values()) #I'm making the assumption that traits will always contain the same keys in the same order.
         if(output[0] > output[1]):
@@ -131,6 +137,9 @@ class Connection:
         #Session = sessionmaker(bind=create_engine('mysql://'+user+':'+password+'@'+db_name+'/'+table_name))
         Session = sessionmaker(bind=create_engine(url))
         self.session = Session()
-    def getPackets(self, ip_address)
+        
+    def getPackets(self, ip_address):
+        return self.session.query(Packet).filter_by(ip=ip_address).order_by(Packet.time).all()
+    
     def getPacketsBounded(self, ip_address, start_id, end_id)
-
+        return self.session.query(Packet).filter_by(ip=ip_address, id >= start_id, id <= end_id).all()

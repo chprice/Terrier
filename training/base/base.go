@@ -47,7 +47,7 @@ func (p Packet) Endpoints() (Endpoint, Endpoint){
 }
 
 // Sets the endpoint given to the new endpoint
-func (p Packet) SetIp(ip, newip net.IP){
+func (p *Packet) SetIp(ip, newip net.IP){
     if p.IPv4Header.SrcIP != nil{
         if p.IPv4Header.SrcIP.Equal(ip){
             p.IPv4Header.SrcIP = newip

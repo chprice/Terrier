@@ -56,6 +56,7 @@ func main(){
                 Number: conversationCount,
                 Hosts: []net.IP{ep1.Ip, ep2.Ip},
                 Start: packet.Timestamp,
+                Scan:false,
             }
             conversationCount += 1
             conversations[conversationKey] = newConv
@@ -85,10 +86,10 @@ func main(){
         (*flow).Packets += 1
         newPacket := packet
 
-        (*conversation).TotalBytes += packet.CaptureLength
-        (*flow).TotalBytes += packet.CaptureLength
+        (*conversation).TotalBytes += newPacket.CaptureLength
+        (*flow).TotalBytes += newPacket.CaptureLength
 
-        packet.Flow = flow.Number
+        newPacket.Flow = flow.Number
         flowPackets[flowKey] = append(flowPackets[flowKey],&newPacket)
     }
 

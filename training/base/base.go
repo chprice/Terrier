@@ -46,6 +46,23 @@ func (p Packet) Endpoints() (Endpoint, Endpoint){
     return Endpoint{Type:flowType,Ip:ip1, Port:p1}, Endpoint{Type:flowType,Ip:ip2, Port:p2}
 }
 
+// Sets the endpoint given to the new endpoint
+func (p Packet) SetIp(ip, newip net.IP){
+    if p.IPv4Header.SrcIP != nil{
+        if p.IPv4Header.SrcIP.Equal(ip){
+            p.IPv4Header.SrcIP = newip
+        }else{
+            p.IPv4Header.DstIP = newip
+        }
+    }else{
+        if p.IPv6Header.SrcIP.Equal(ip){
+            p.IPv6Header.SrcIP = newip
+        }else{
+            p.IPv6Header.DstIP = newip
+        }
+    }
+}
+
 func (p Packet) FlowId()string{
     return FlowId(p.Endpoints())
 }
@@ -97,6 +114,7 @@ type Conversation struct {
     Duration    int64
     TotalBytes  int
     Throughput  int64
+    Scan        bool
 }
 
 type Flow struct {

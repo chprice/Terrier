@@ -82,7 +82,7 @@ func main(){
         flow := flows[flowKey]
         (*flow).Endpoint = packet.Timestamp
         (*conversation).Endpoint = packet.Timestamp
-
+        (*flow).Packets += 1
         newPacket := packet
 
         (*conversation).TotalBytes += packet.CaptureLength
@@ -98,10 +98,20 @@ func main(){
 
     for key, conversation := range(conversations){
         conversation.Duration = conversation.Endpoint - conversation.Start
-        conversation.Throughput = int64(float64(conversation.TotalBytes)/ float64(conversation.Duration)/float64(1000000000))
+        seconds := conversation.Duration/int64(1000000000)
+        if seconds == 0{
+            seconds = int64(1)
+        }
+        throughput :=  int64((int64(conversation.TotalBytes) * int64(8))/ seconds)
+        conversation.Throughput = throughput
         for _, flow := range(convFlows[key]){
             flow.Duration = flow.Endpoint - flow.Start
-            flow.Throughput = int64(float64(flow.TotalBytes) / float64(conversation.Duration)/float64(1000000000))
+            seconds = flow.Duration/int64(1000000000)
+            if seconds == 0{
+                seconds = int64(1)
+            }
+            throughput = int64(int64(flow.TotalBytes * 8) / seconds)
+            flow.Throughput = throughput
             for _, packet := range(flowPackets[flow.FlowId()]){
                 err = packetC.Insert(packet)
                 if err != nil{

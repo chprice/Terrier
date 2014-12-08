@@ -8,9 +8,11 @@ import(
     "gopkg.in/mgo.v2/bson"
     "container/heap"
     "net"
-    _ "github.com/lib/pq"
+    "github.com/lib/pq"
     "database/sql"
     "time"
+    "encoding/json"
+    "os"
 )
 
 var configPath string
@@ -50,8 +52,8 @@ func main(){
     defer session.Close()
     db := session.DB("packetgen")
     // Create packet queue.
-    pq := make(base.PacketQueue, 0)
-    heap.Init(&pq)
+    packetq := make(base.PacketQueue, 0)
+    heap.Init(&packetq)
 
     // Just to start were going to use all packets, no filtering.
     convC := db.C("conversations")
@@ -71,6 +73,17 @@ func main(){
         panic(err)
     }
     endId = startId
+
+    txn, err := sqldb.Begin()
+    if err != nil {
+        panic(err)
+    }
+
+    stmt, err := txn.Prepare(pq.CopyIn("packets", "id", "port","ip","ttl","time"))
+    if err != nil {
+        panic(err)
+    }
+
     // Json file
 
     scans := make(map[string]bool, 0)
@@ -112,7 +125,7 @@ func main(){
                 // Keep track of the packet.
                 newpacket := packet
                 newpacket.SetIp(oldLocal, localIp)
-                heap.Push(&pq, &base.Item{Value:newpacket})
+                heap.Push(&packetq, &base.Item{Value:newpacket})
             }
         }
     }
@@ -126,28 +139,51 @@ func main(){
     // Start && end of sliding windows in nanoseconds
     window := NewWindow(time, pkts)
     // Print out the packets in order? Hopefully..
-    for pq.Len() > 0 {
-        item := heap.Pop(&pq).(*base.Item)
+    for packetq.Len() > 0 {
+        item := heap.Pop(&packetq).(*base.Item)
         window.Add(&item.Value)
         if window.Full(){
-            testCases = append(testCases, handlePackets(window.Flush(), scans,sqldb, startId, &endId)...)
+            testCases = append(testCases, handlePackets(window.Flush(), scans,stmt, startId, &endId)...)
         }
     }
-    testCases = append(testCases, handlePackets(window.Flush(), scans, sqldb, startId, &endId)...)
+    testCases = append(testCases, handlePackets(window.Flush(), scans, stmt, startId, &endId)...)
 
+    fmt.Println("Flusing db")
+    _, err = stmt.Exec()
+    if err != nil {
+        panic(err)
+    }
 
+    err = stmt.Close()
+    if err != nil {
+        panic(err)
+    }
+
+    err = txn.Commit()
+    if err != nil {
+        panic(err)
+    }
+
+    fileName := "out.json"
     // Save testCases to json file
     fmt.Println("Saving to json")
-    fmt.Printf("%+v\n",testCases)
-}
-
-func handlePackets(pkts []*base.Packet, scans map[string]bool, db *sql.DB, startId int, endId *int)[]Testcase{
-    ips := make(map[string]net.IP, 0)
-    stmt, err := db.Prepare("INSERT INTO packets"+
-            "(id, port, ip, ttl, time) VALUES($1, $2, $3, $4, $5)")
+    b, err := json.Marshal(testCases)
     if err != nil{
         panic(err)
     }
+    fd, err := os.Create(fileName) 
+    if err != nil{
+        panic(err)
+    }
+    _, err = fd.Write(b)
+    if err != nil{
+        panic(err)
+    }
+
+}
+
+func handlePackets(pkts []*base.Packet, scans map[string]bool, stmt *sql.Stmt, startId int, endId *int)[]Testcase{
+    ips := make(map[string]net.IP, 0)
 
     for _, pkt := range(pkts){
         fmt.Printf("%+v\n", pkt)
@@ -177,10 +213,10 @@ func handlePackets(pkts []*base.Packet, scans map[string]bool, db *sql.DB, start
     for _, ip := range(ips){
         tcs = append(tcs,
             Testcase{
-                start:startId,
-                end:*endId,
-                scan:scans[ip.String()],
-                ip:ip.String(),
+                Start:startId+1,
+                End:*endId,
+                Scan:scans[ip.String()],
+                Ip:ip.String(),
             })
     }
     return tcs
@@ -199,9 +235,10 @@ func NewWindow(delta int64, count int) Window{
 }
 
 type Testcase struct{
-    start,end   int
-    scan        bool
-    ip          string
+    Start       int `json:"Start"`
+    End         int `json:"End"`
+    Scan        bool `json:"Scan"`
+    Ip          string `json:"Ip"`
 }
 
 type Window struct{

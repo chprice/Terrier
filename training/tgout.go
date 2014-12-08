@@ -144,6 +144,20 @@ func main(){
         window.Add(&item.Value)
         if window.Full(){
             testCases = append(testCases, handlePackets(window.Flush(), scans,stmt, startId, &endId)...)
+            _, err = stmt.Exec()
+            if err != nil {
+                panic(err)
+            }
+
+            err = stmt.Close()
+            if err != nil {
+                panic(err)
+            }
+
+            stmt, err = txn.Prepare(pq.CopyIn("packets", "id", "port","ip","ttl","time"))
+            if err != nil {
+                panic(err)
+            }
         }
     }
     testCases = append(testCases, handlePackets(window.Flush(), scans, stmt, startId, &endId)...)

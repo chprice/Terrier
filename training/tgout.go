@@ -138,6 +138,7 @@ func main(){
 
     // Save testCases to json file
     fmt.Println("Saving to json")
+    fmt.Printf("%+v\n",testCases)
 }
 
 func handlePackets(pkts []*base.Packet, scans map[string]bool, db *sql.DB, startId int, endId *int)[]Testcase{
@@ -150,32 +151,26 @@ func handlePackets(pkts []*base.Packet, scans map[string]bool, db *sql.DB, start
 
     for _, pkt := range(pkts){
         fmt.Printf("%+v\n", pkt)
-        (*endId)+=1
         var rem base.Endpoint
         var loc base.Endpoint
         // Check if the ip exists and set rem/loc
-        ep1, ep2 := (*pkt).Endpoints()
-        if ep1.Ip.Equal(localIp){
-            rem = ep2
-            loc = ep1
-        }else{
-            rem = ep1
-            loc = ep2
-        }
-        if _, ok := ips[rem.Ip.String()]; !ok {
-            ips[rem.Ip.String()] = rem.Ip
-        }
-
-        // Write packet to mysql
-        baseTime := time.Time{}
-        duration, err := time.ParseDuration(fmt.Sprintf("%dns",pkt.Timestamp))
-        if err != nil{
-            panic(err)
-        }
-        _, err = stmt.Exec(endId,loc.Port, rem.Ip.String(),
-            0, baseTime.Add(duration))
-        if err != nil{
-            panic(err)
+        rem, loc = (*pkt).Endpoints()
+        if loc.Ip.Equal(localIp){
+            if _, ok := ips[rem.Ip.String()]; !ok {
+                ips[rem.Ip.String()] = rem.Ip
+            }
+            // Write packet to mysql
+            baseTime := time.Time{}
+            duration, err := time.ParseDuration(fmt.Sprintf("%dns",pkt.Timestamp))
+            if err != nil{
+                panic(err)
+            }
+            (*endId)+=1
+            _, err = stmt.Exec(endId,loc.Port, rem.Ip.String(),
+                0, baseTime.Add(duration))
+            if err != nil{
+                panic(err)
+            }
         }
     }
     tcs := make([]Testcase, 0)

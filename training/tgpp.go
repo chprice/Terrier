@@ -153,8 +153,8 @@ func handlePacket(packet gopacket.Packet, out chan base.Packet){
         }
     }
 
-    if ((&(pkt.TCPHeader) != nil || &(pkt.UDPHeader) != nil) &&
-        (&(pkt.IPv4Header) != nil || &(pkt.IPv6Header) != nil)){
+    if ((pkt.TCPHeader.SrcPort != 0 || pkt.UDPHeader.SrcPort != 0) &&
+        (pkt.IPv4Header.Version != 0 || pkt.IPv6Header.Version != 0)){
         out <- pkt
     }
 }

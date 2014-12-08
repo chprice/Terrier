@@ -94,15 +94,25 @@ func main(){
     for Citer.Next(&conv){
         convCount += 1
         var oldLocal net.IP // host to replace with localIP
-        for _, ip := range(conv.Hosts){
-            if ip.Equal(localIp){
-                oldLocal = localIp
+        if conv.Scan{
+            // If there is a scan, overwrite the destination of the scan
+            for _, ip := range(conv.Hosts){
+                if !ip.Equal(conv.Scanner){
+                    oldLocal = localIp
+                }
+            }
+        }else{
+            for _, ip := range(conv.Hosts){
+                // Make sure we dont accedentially make packets that
+                // where src == dst
+                if ip.Equal(localIp){
+                    oldLocal = localIp
+                }
             }
         }
         if oldLocal == nil{
             // Default to the first ip to overwrite
             oldLocal = conv.Hosts[0]
-
         }
 
         // Get the ip that is not going to be overwritten
@@ -114,7 +124,7 @@ func main(){
         }
         scans[remoteIp.String()] = conv.Scan
 
-        // Grab each flow for that iter.
+        // Grab each flow for that conversation.
         var flow base.Flow
         Fiter := flowC.Find(bson.M{"conversation":conv.Number}).Iter()
         for Fiter.Next(&flow){
@@ -280,7 +290,7 @@ func (w *Window) Full() bool{
 
 func (w *Window) Flush()[]*base.Packet{
     fmt.Printf("0:%d\n", w.index)
-    pks := w.window[0:w.index-1]
+    pks := w.window[0:w.index]
     w.start = w.now
     w.end = w.start + w.delta
     w.index = 0

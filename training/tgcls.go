@@ -111,13 +111,15 @@ func classifyRange(db *mgo.Database, start, end int, scans map[string]bool){
         ep1, ep2 := packet.Endpoints()
         conversationKey := packet.ConversationId()
         isScan := false
+        var scanIp net.IP
         if _, ok := scans[ep1.Ip.String()]; ok{
+            scanIp = ep1.Ip
             isScan = true
         }
         if _, ok := scans[ep2.Ip.String()]; ok{
+            scanIp = ep2.Ip
             isScan = true
         }
-
         flowKey := packet.FlowId()
         if _, ok := conversations[conversationKey]; !ok{
             // Need to create conversation
@@ -126,6 +128,7 @@ func classifyRange(db *mgo.Database, start, end int, scans map[string]bool){
                 Hosts: []net.IP{ep1.Ip, ep2.Ip},
                 Start: packet.Timestamp,
                 Scan: isScan,
+                Scanner:scanIp,
             }
             conversationCount += 1
             conversations[conversationKey] = newConv

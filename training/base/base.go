@@ -108,6 +108,7 @@ func (e Endpoint) Id() string{
 
 type Conversation struct {
     Number      int // UID
+    Scanner     net.IP // Ip address of scanner
     Hosts       []net.IP
     Start       int64
     Endpoint    int64

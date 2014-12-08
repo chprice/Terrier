@@ -172,14 +172,21 @@ func exportPackets(packetSource chan base.Packet, db *mgo.Database){
         Sparse: true,
     }
 
-    err := c.EnsureIndex(index)
+    number, err := c.Count()
+    if err != nil{
+        panic(err)
+    }
+
+    err = c.EnsureIndex(index)
     if err != nil{
         panic(err)
     }
 
     bulk := c.Bulk()
 
-    number := 1
+
+    number += 1
+
     fmt.Println("Started to read packets")
     for packet := range packetSource{
         packet.Number = number

@@ -172,10 +172,11 @@ func exportPackets(packetSource chan base.Packet, db *mgo.Database){
         Sparse: true,
     }
 
-    number, err := c.Count()
+    start, err := c.Count()
     if err != nil{
         panic(err)
     }
+    number := start
 
     err = c.EnsureIndex(index)
     if err != nil{
@@ -206,4 +207,5 @@ func exportPackets(packetSource chan base.Packet, db *mgo.Database){
         panic(err)
     }
     fmt.Println("Finished writing data.")
+    fmt.Printf("Inserted packets from %d to %d\n",start, number-1)
 }

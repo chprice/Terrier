@@ -10,24 +10,19 @@ import(
 )
 
 var configPath  string
-var start       int
-var end         int
+var source       int
 
 func init() {
     const (
         defaultConfig   = "config.json"
         configUsage     = "the location of the configuration file"
-        defaultStart    = 0
-        startUsage      = "the packet number to start clasification"
-        defaultEnd      = 0
-        endUsage        = "the last packet number to classify"
+        defaultSource   = -1
+        sourceUsage     = "the source to classify (default: 0, all)"
     )
     flag.StringVar(&configPath, "config", defaultConfig, configUsage)
     flag.StringVar(&configPath, "c" , defaultConfig, configUsage+" (shorthand)")
-    flag.IntVar(&start, "start", defaultStart, startUsage)
-    flag.IntVar(&start, "s", defaultStart, startUsage +" (shorthand)")
-    flag.IntVar(&end, "end", defaultEnd, endUsage)
-    flag.IntVar(&end, "e", defaultEnd, endUsage+" (shorthand)")
+    flag.IntVar(&source, "source", defaultSource, sourceUsage)
+    flag.IntVar(&source, "s", defaultSource, sourceUsage +" (shorthand)")
 }
 
 func main(){
@@ -40,10 +35,33 @@ func main(){
     if err != nil {
         panic(err)
     }
- 
     defer session.Close()
-
+    // List of scans
     db := session.DB("packetgen")
+    if source == -1{
+        fmt.Println("Fuck")
+        // Iterate through each source in the db. classify it's range.
+        sources := db.C("sources")
+        var src base.Source
+        iter := sources.Find(nil).Iter()
+        for iter.Next(&src){
+            // Get scans in this source
+            var scans = make(map[string]bool)
+            for _, ip := range(src.Scans){
+                scans[ip] = true
+            }
+            classifyRange(db, src.Start, src.End,scans)
+        }
+        err := iter.Err()
+        if err != nil{
+            panic(err)
+        }
+    }
+}
+
+
+func classifyRange(db *mgo.Database, start, end int, scans map[string]bool){
+    fmt.Println("Scan")
     rawPacketC := db.C("rawpackets")
 
     flows := make(map[string]*base.Flow, 10)
@@ -61,7 +79,7 @@ func main(){
         DropDups: false,
         Background: true,
     }
-    err = packetC.EnsureIndex(index)
+    err := packetC.EnsureIndex(index)
     if err != nil{
         panic(err)
     }
@@ -94,6 +112,14 @@ func main(){
         // Process packet
         ep1, ep2 := packet.Endpoints()
         conversationKey := packet.ConversationId()
+        isScan := false
+        if _, ok := scans[ep1.Ip.String()]; ok{
+            isScan = true
+        }
+        if _, ok := scans[ep2.Ip.String()]; ok{
+            isScan = true
+        }
+
         flowKey := packet.FlowId()
         if _, ok := conversations[conversationKey]; !ok{
             // Need to create conversation
@@ -101,7 +127,7 @@ func main(){
                 Number: conversationCount,
                 Hosts: []net.IP{ep1.Ip, ep2.Ip},
                 Start: packet.Timestamp,
-                Scan:false,
+                Scan: isScan,
             }
             conversationCount += 1
             conversations[conversationKey] = newConv
@@ -137,9 +163,6 @@ func main(){
         newPacket.Flow = flow.Number
         flowPackets[flowKey] = append(flowPackets[flowKey],&newPacket)
     }
-
-    
-
     for key, conversation := range(conversations){
         conversation.Duration = conversation.Endpoint - conversation.Start
         seconds := conversation.Duration/int64(1000000000)
@@ -172,7 +195,6 @@ func main(){
             panic(err)
         }
     }
-    // Find the duration for the flows and conversations
     fmt.Printf("Indexed %d packets\n", end-start)
     fmt.Printf("Flows: %d(%dnew)\n", flowCount, flowCount- flowStart)
     fmt.Printf("Conversatiosn: %d(%d new)\n", conversationCount, conversationCount-convStart)

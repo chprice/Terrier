@@ -177,3 +177,7 @@ type UDPHeader struct {
     Checksum            uint16
 }
 
+type Source struct{
+    Number, Start, End int
+    Scans []string
+}

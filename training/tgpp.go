@@ -15,10 +15,11 @@ import(
 
 var configPath string
 var start int64 = -1
+var config Config
 
 func init() {
     const (
-        defaultConfig   = "config.json"
+        defaultConfig   = "pp-config.json"
         configUsage     = "the location of the configuration file"
     )
     flag.StringVar(&configPath, "config", defaultConfig, configUsage)
@@ -33,6 +34,7 @@ type DBConfig struct {
 type Config struct{
     DB      DBConfig    `json:"db"`
     Raw     string      `json:"pcap"`
+    Scans   []string    `json:"scans"`
 }
 
 
@@ -51,7 +53,6 @@ func bootstrap(configPath string, config *Config)error{
 func main(){
     flag.Parse()
 
-    var config Config
     if err := bootstrap(configPath, &config); err != nil{
         panic(err)
     }
@@ -203,6 +204,17 @@ func exportPackets(packetSource chan base.Packet, db *mgo.Database){
         number += 1
     }
     _, err = bulk.Run()
+    if err != nil{
+        panic(err)
+    }
+
+    s := db.C("sources")
+    snumber, err := s.Count()
+    if err != nil{
+        panic(err)
+    }
+    source := base.Source{Number: snumber, Start:start, End:number-1,Scans:config.Scans}
+    err = s.Insert(source)
     if err != nil{
         panic(err)
     }

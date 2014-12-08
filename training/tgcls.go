@@ -39,7 +39,6 @@ func main(){
     // List of scans
     db := session.DB("packetgen")
     if source == -1{
-        fmt.Println("Fuck")
         // Iterate through each source in the db. classify it's range.
         sources := db.C("sources")
         var src base.Source
@@ -61,7 +60,6 @@ func main(){
 
 
 func classifyRange(db *mgo.Database, start, end int, scans map[string]bool){
-    fmt.Println("Scan")
     rawPacketC := db.C("rawpackets")
 
     flows := make(map[string]*base.Flow, 10)

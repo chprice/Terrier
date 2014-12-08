@@ -97,6 +97,27 @@ func main(){
     flowC := db.C("flows")
     packetC := db.C("packets")
 
+    index := mgo.Index{
+        Key: []string{"flow"},
+        Unique: false,
+        DropDups: false,
+        Background: true,
+    }
+    err = packetC.EnsureIndex(index)
+    if err != nil{
+        panic(err)
+    }
+    index = mgo.Index{
+        Key: []string{"conversation"},
+        Unique: false,
+        DropDups: false,
+        Background: true,
+    }
+    err = flowC.EnsureIndex(index)
+    if err != nil{
+        panic(err)
+    }
+
     for key, conversation := range(conversations){
         conversation.Duration = conversation.Endpoint - conversation.Start
         seconds := conversation.Duration/int64(1000000000)

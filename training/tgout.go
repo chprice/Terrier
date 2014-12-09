@@ -13,6 +13,7 @@ import(
     "time"
     "encoding/json"
     "os"
+    "math/rand"
 )
 
 var configPath string
@@ -51,10 +52,7 @@ func main(){
 
     defer session.Close()
     db := session.DB("packetgen")
-    // Create packet queue.
-    packetq := make(base.PacketQueue, 0)
-    heap.Init(&packetq)
-
+    
     // Just to start were going to use all packets, no filtering.
     convC := db.C("conversations")
     flowC := db.C("flows")
@@ -79,111 +77,15 @@ func main(){
         panic(err)
     }
 
-    stmt, err := txn.Prepare(pq.CopyIn("packets", "id", "port","ip","ttl","time"))
-    if err != nil {
-        panic(err)
-    }
-
-    // Json file
-
-    scans := make(map[string]bool, 0)
-
-    convCount:=0
-    var conv base.Conversation
-    Citer := convC.Find(nil).Iter()
-    for Citer.Next(&conv){
-        convCount += 1
-        var oldLocal net.IP // host to replace with localIP
-        if conv.Scan{
-
-            fmt.Printf("%+v\n",conv)
-            // If there is a scan, overwrite the destination of the scan
-            for _, ip := range(conv.Hosts){
-                if !ip.Equal(conv.Scanner){
-                    oldLocal = ip
-                }
-            }
-            fmt.Printf("Overwriting%s\n", oldLocal)
-        }else{
-            for _, ip := range(conv.Hosts){
-                // Make sure we dont accedentially make packets that
-                // where src == dst
-                if ip.Equal(localIp){
-                    oldLocal = localIp
-                }
-            }
-        }
-        if oldLocal == nil{
-            // Default to the first ip to overwrite
-            oldLocal = conv.Hosts[0]
-        }
-
-        // Get the ip that is not going to be overwritten
-        var remoteIp net.IP
-        for _, ip := range(conv.Hosts){
-            if !ip.Equal(oldLocal){
-                remoteIp = ip
-            }
-        }
-        fmt.Printf("Setting %s to %v\n", remoteIp.String(), conv.Scan)
-        scans[remoteIp.String()] = conv.Scan
-
-        // Grab each flow for that conversation.
-        var flow base.Flow
-        Fiter := flowC.Find(bson.M{"conversation":conv.Number}).Iter()
-        for Fiter.Next(&flow){
-            // Grab the packets.
-            var packet base.Packet
-            Piter := packetC.Find(bson.M{"flow":flow.Number}).Iter()
-            for Piter.Next(&packet){
-                // Keep track of the packet.
-                newpacket := packet
-                newpacket.SetIp(oldLocal, localIp)
-                heap.Push(&packetq, &base.Item{Value:newpacket})
-            }
-        }
-    }
-
+    // Generate packets.
+    rand.Seed(42)
+    testruns := 10
     testCases := make([]Testcase, 0)
+    for i:=0; i<testruns;i++{
+        testCases = append(testCases, generateTests(txn, convC, flowC, packetC, &startId, &endId)...)
+        fmt.Printf("[%d] %d %d->%d\n", i, len(testCases), startId, endId)
+        startId = endId
 
-    // Window size
-    time := int64(30000000000)
-    pkts := 1000
-
-    // Start && end of sliding windows in nanoseconds
-    window := NewWindow(time, pkts)
-    // Print out the packets in order? Hopefully..
-    for packetq.Len() > 0 {
-        item := heap.Pop(&packetq).(*base.Item)
-        window.Add(&item.Value)
-        if window.Full(){
-            testCases = append(testCases, handlePackets(window.Flush(), scans,stmt, startId, &endId)...)
-            _, err = stmt.Exec()
-            if err != nil {
-                panic(err)
-            }
-
-            err = stmt.Close()
-            if err != nil {
-                panic(err)
-            }
-
-            stmt, err = txn.Prepare(pq.CopyIn("packets", "id", "port","ip","ttl","time"))
-            if err != nil {
-                panic(err)
-            }
-        }
-    }
-    testCases = append(testCases, handlePackets(window.Flush(), scans, stmt, startId, &endId)...)
-
-    _, err = stmt.Exec()
-    if err != nil {
-        panic(err)
-    }
-
-    err = stmt.Close()
-    if err != nil {
-        panic(err)
     }
 
     err = txn.Commit()
@@ -206,8 +108,136 @@ func main(){
     if err != nil{
         panic(err)
     }
-
 }
+
+func generateTests(txn *sql.Tx, convC, flowC, packetC *mgo.Collection, startId, endId *int)[]Testcase{
+    stmt, err := txn.Prepare(pq.CopyIn("packets", "id", "port","ip","ttl","time"))
+    if err != nil {
+        panic(err)
+    }
+
+    // Create packet queue.
+    packetq := make(base.PacketQueue, 0)
+    heap.Init(&packetq)
+
+    scans := make(map[string]bool, 0)
+    targetduration := int64(30 * 60000000000) // 30 minutes
+    last := int64(1)
+
+    done := false
+    convCount:=0
+
+    for !done {
+        var conv base.Conversation
+        Citer := convC.Find(nil).Iter()
+        for Citer.Next(&conv){
+
+
+            offset := int64(rand.Intn(int(last)))
+            if offset + conv.Duration >= last{
+                last = offset + conv.Duration
+            }
+            if last > targetduration{
+                last = int64(1)
+            }
+            convCount += 1
+            var oldLocal net.IP // host to replace with localIP
+            if conv.Scan{
+                // If there is a scan, overwrite the destination of the scan
+                for _, ip := range(conv.Hosts){
+                    if !ip.Equal(conv.Scanner){
+                        oldLocal = ip
+                    }
+                }
+            }else{
+                for _, ip := range(conv.Hosts){
+                    // Make sure we dont accedentially make packets that
+                    // where src == dst
+                    if ip.Equal(localIp){
+                        oldLocal = localIp
+                    }
+                }
+            }
+            if oldLocal == nil{
+                // Default to the first ip to overwrite
+                oldLocal = conv.Hosts[0]
+            }
+
+            // Get the ip that is not going to be overwritten
+            var remoteIp net.IP
+            for _, ip := range(conv.Hosts){
+                if !ip.Equal(oldLocal){
+                    remoteIp = ip
+                }
+            }
+            scans[remoteIp.String()] = conv.Scan
+            // Grab each flow for that conversation.
+            var flow base.Flow
+            Fiter := flowC.Find(bson.M{"conversation":conv.Number}).Iter()
+            for Fiter.Next(&flow){
+                // Grab the packets.
+                var packet base.Packet
+                Piter := packetC.Find(bson.M{"flow":flow.Number}).Iter()
+                for Piter.Next(&packet){
+                    // Keep track of the packet.
+                    newpacket := packet
+                    newpacket.Timestamp += offset
+                    newpacket.SetIp(oldLocal, localIp)
+                    heap.Push(&packetq, &base.Item{Value:newpacket})
+                }
+            }
+        }
+        if convCount >= 1000{
+            done = true
+        }
+    }
+
+    testCases := make([]Testcase, 0)
+
+    // Window size
+    time := int64(30000000000)
+    pkts := 1000
+
+    // Start && end of sliding windows in nanoseconds
+    window := NewWindow(time, pkts)
+    // Print out the packets in order? Hopefully..
+    for packetq.Len() > 0 {
+        item := heap.Pop(&packetq).(*base.Item)
+        window.Add(&item.Value)
+        if window.Full(){
+            testCases = append(testCases, handlePackets(window.Flush(), scans,stmt, *startId, endId)...)
+            _, err = stmt.Exec()
+            if err != nil {
+                panic(err)
+            }
+
+            err = stmt.Close()
+            if err != nil {
+                panic(err)
+            }
+
+            stmt, err = txn.Prepare(pq.CopyIn("packets", "id", "port","ip","ttl","time"))
+            if err != nil {
+                panic(err)
+            }
+        }
+    }
+    testCases = append(testCases, handlePackets(window.Flush(), scans, stmt, *startId, endId)...)
+
+
+    _, err = stmt.Exec()
+    if err != nil {
+        panic(err)
+    }
+
+    err = stmt.Close()
+    if err != nil {
+        panic(err)
+    }
+    
+    return testCases
+}
+
 
 func handlePackets(pkts []*base.Packet, scans map[string]bool, stmt *sql.Stmt, startId int, endId *int)[]Testcase{
     ips := make(map[string]net.IP, 0)
@@ -292,7 +322,7 @@ func (w *Window) Full() bool{
 }
 
 func (w *Window) Flush()[]*base.Packet{
-    fmt.Printf("0:%d\n", w.index)
+    //fmt.Printf("0:%d\n", w.index)
     pks := w.window[0:w.index]
     w.start = w.now
     w.end = w.start + w.delta

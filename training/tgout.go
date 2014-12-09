@@ -95,12 +95,15 @@ func main(){
         convCount += 1
         var oldLocal net.IP // host to replace with localIP
         if conv.Scan{
+
+            fmt.Printf("%+v\n",conv)
             // If there is a scan, overwrite the destination of the scan
             for _, ip := range(conv.Hosts){
                 if !ip.Equal(conv.Scanner){
-                    oldLocal = localIp
+                    oldLocal = ip
                 }
             }
+            fmt.Printf("Overwriting%s\n", oldLocal)
         }else{
             for _, ip := range(conv.Hosts){
                 // Make sure we dont accedentially make packets that
@@ -122,6 +125,7 @@ func main(){
                 remoteIp = ip
             }
         }
+        fmt.Printf("Setting %s to %v\n", remoteIp.String(), conv.Scan)
         scans[remoteIp.String()] = conv.Scan
 
         // Grab each flow for that conversation.
@@ -172,7 +176,6 @@ func main(){
     }
     testCases = append(testCases, handlePackets(window.Flush(), scans, stmt, startId, &endId)...)
 
-    fmt.Println("Flusing db")
     _, err = stmt.Exec()
     if err != nil {
         panic(err)
@@ -210,7 +213,7 @@ func handlePackets(pkts []*base.Packet, scans map[string]bool, stmt *sql.Stmt, s
     ips := make(map[string]net.IP, 0)
 
     for _, pkt := range(pkts){
-        fmt.Printf("%+v\n", pkt)
+        //fmt.Printf("%+v\n", pkt)
         var rem base.Endpoint
         var loc base.Endpoint
         // Check if the ip exists and set rem/loc
@@ -227,7 +230,7 @@ func handlePackets(pkts []*base.Packet, scans map[string]bool, stmt *sql.Stmt, s
             }
             (*endId)+=1
             _, err = stmt.Exec(endId,loc.Port, rem.Ip.String(),
-                0, baseTime.Add(duration))
+                pkt.IPv4Header.TTL + pkt.IPv6Header.HopLimit, baseTime.Add(duration))
             if err != nil{
                 panic(err)
             }
@@ -278,7 +281,7 @@ func (w *Window) Add(p *base.Packet){
 }
 
 func (w *Window) Full() bool{
-    fmt.Printf("Full %d %d %d %d\n",w.now, w.end, w.index, w.pkts)
+    //fmt.Printf("Full %d %d %d %d\n",w.now, w.end, w.index, w.pkts)
     if w.now >= w.end{
         return true
     }

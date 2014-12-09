@@ -6,6 +6,8 @@
 
 import pickle
 import json
+from datetime import timedelta
+from math import log
 
 from pybrain.tools.shortcuts import buildNetwork
 from pybrain.tools.validation import CrossValidator
@@ -19,6 +21,11 @@ from sqlalchemy.engine.url import URL
 from sqlalchemy import between
 
 from db_schema import Packet
+
+def ln(x):
+    if(x==0):
+        return 0
+    return 1/float(x) #log(x)
 
 # Wrapper around the pybrain Neural Net. Provides methods to import/export a neual net
 #  and train or classify the neural net.
@@ -51,15 +58,16 @@ class NeuralNet:
         
 
     def createDataSetFromFile(self, filename):
+        print "Creating data set from file"
         ds = SupervisedDataSet(7, 2)
-        trainingDatas = [[self.aggregator.aggregate(self.collector.getPacketsBounded(data["ip"], data["start"], data["end"])), data["scan"]]
-                        for data in [json.loads(line) for line in open(filename).readLines()]]
-
-        for trainingData in trainingDatas:
+        for loc, data in enumerate(json.loads(open(filename).readline())[:1000]):
+            print loc
+            trainingData = [self.aggregator.aggregate(self.connection.getPacketsBounded(data["Ip"], data["Start"], data["End"])), data["Scan"]]
             if(trainingData[1]):
-                ds.addSample(trainingData[0], (1,0))
+                ds.addSample(trainingData[0].values(), (1,0))
             else:
-                ds.addSample(trainingData[0], (0,1))
+                ds.addSample(trainingData[0].values(), (0,1))
+        return ds
 
     def trainFromFile(self, filename):  
         trainer = BackpropTrainer(self.net, self.createDataSetFromFile(filename))
@@ -71,7 +79,7 @@ class NeuralNet:
         trainer = BackpropTrainer(self.net)
         crossValidator = CrossValidator(trainer, self.createDataSetFromFile(filename), n_folds=10)
         result = crossValidator.validate()
-        print(result) # ??
+        print result*100, "%" # ??
 
 
 # Aggregator serves as a utility class to help convert raw packet data into useful metrics for the neural net.
@@ -82,10 +90,10 @@ class Aggregator:
         traits = dict()
         
         traits["seenSubnet"] = self.seenSubnet(packets)
-        traits["numberIrregularPorts"] = self.numberIrregularPorts(packets)
+        traits["numberIrregularPorts"] = ln(self.numberIrregularPorts(packets))
         traits["averageTimeBetweenPorts"] = self.averageTimeBetweenPorts(packets)
-        traits["numberPorts"] = self.numberPorts(packets)
-        traits["ratioPacketsToPorts"] = self.ratioPacketsToPorts(packets)
+        traits["numberPorts"] = ln(self.numberPorts(packets))
+        traits["ratioPacketsToPorts"] = ln(self.ratioPacketsToPorts(packets))
         traits["averageTTL"] = self.averageTTL(packets)
         traits["diffTTL"] = self.diffTTL(packets)
 
@@ -104,18 +112,18 @@ class Aggregator:
         #times = sorted([packet.time for packet in packets]) # Assume packets are in order already
         seenPort = packets[0].port
         seenTime = packets[0].time
-        totalTime = 0
-        totalSegments = 0
+        totalTime = timedelta()
+        totalSegments = 1
         for packet in packets:
             if seenPort != packet.port:
                 totalTime += packet.time - seenTime
                 totalSegments += 1
                 seenPort = packet.port
                 seenTime = packet.time
-        if(totalSegments == 0):
+        if(totalSegments == 1):
             totalTime = packets[-1].time - packets[0].time
             
-        return totalTime
+        return float(totalTime.total_seconds())/totalSegments
         
     def numberPorts(self, packets):
         return len(set([packet.port for packet in packets]))
@@ -132,7 +140,7 @@ class Aggregator:
 
 # Connection wraps the sqlalchemy connection and provides methods to fetch packets.
 class Connection:
-    def __init__(self, db_user, db_password, db_host, db_port, table_name):
+    def __init__(self, drivername, db_user, db_password, db_host, db_port, table_name):
         url = URL(drivername, username=db_user, password=db_password, host=db_host, port=db_port, database=table_name)
         #Session = sessionmaker(bind=create_engine('mysql://'+user+':'+password+'@'+db_name+'/'+table_name))
         Session = sessionmaker(bind=create_engine(url))

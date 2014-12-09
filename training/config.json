@@ -1,0 +1,7 @@
+{
+    "db":
+    {
+        "database":"packetgen"
+    },
+    "pcap":"seeddata/w1-mo-inside.tcpdump"
+}

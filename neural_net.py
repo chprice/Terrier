@@ -25,7 +25,7 @@ from db_schema import Packet
 def ln(x):
     if(x==0):
         return 0
-    return 1/log(x)
+    return log(x)
 
 # Wrapper around the pybrain Neural Net. Provides methods to import/export a neual net
 #  and train or classify the neural net.
@@ -40,10 +40,10 @@ class NeuralNet:
     #def __repr__(self)
     
     def importFromFile(self, filename):
-        self.net = pickle.load(open(filename))
+        self.net = pickle.load(open(filename,'r'))
         
     def exportToFile(self, filename):
-        pickle.dump(self.net, open(filename))
+        pickle.dump(self.net, open(filename,'w'))
 
     def checkScan(self, ip_address):
         return self.classify(self.aggregator.aggregate(self.connection.getPackets(ip_address)))
@@ -60,26 +60,27 @@ class NeuralNet:
     def createDataSetFromFile(self, filename):
         print "Creating data set from file"
         ds = SupervisedDataSet(7, 2)
-        for loc, data in enumerate(json.loads(open(filename).readline())[:1000]):
-            print loc
+        for loc, data in enumerate(json.loads(open(filename).readline())):
+            if(loc%100==0):
+                print loc, "training ip sets processed"
+                
             trainingData = [self.aggregator.aggregate(self.connection.getPacketsBounded(data["Ip"], data["Start"], data["End"])), data["Scan"]]
             if(trainingData[1]):
                 ds.addSample(trainingData[0].values(), (1,0))
             else:
                 ds.addSample(trainingData[0].values(), (0,1))
+        print "Data set created"
         return ds
 
     def trainFromFile(self, filename):  
         trainer = BackpropTrainer(self.net, self.createDataSetFromFile(filename))
-        #trainer.train()
-        trainer.trainUntilConvergence()
+        trainer.trainUntilConvergence(maxEpochs=10)
         
     def crossValidation(self, filename):
-        #trainer = BackpropTrainer(self.net, self.createDataSetFromFile(filename))
         trainer = BackpropTrainer(self.net)
         crossValidator = CrossValidator(trainer, self.createDataSetFromFile(filename), n_folds=10)
         result = crossValidator.validate()
-        print result*100, "%" # ??
+        print result*100, "%"
 
 
 # Aggregator serves as a utility class to help convert raw packet data into useful metrics for the neural net.
@@ -94,14 +95,14 @@ class Aggregator:
         traits["averageTimeBetweenPorts"] = self.averageTimeBetweenPorts(packets)
         traits["numberPorts"] = ln(self.numberPorts(packets))
         traits["ratioPacketsToPorts"] = ln(self.ratioPacketsToPorts(packets))
-        traits["averageTTL"] = self.averageTTL(packets)
+        traits["averageTTL"] = ln(self.averageTTL(packets))
         traits["diffTTL"] = self.diffTTL(packets)
 
         return traits
 
 
     def seenSubnet(self, packets):
-        return 0 # TODO
+        return 0 # TODO (connect to the database, update seen table)
     
     def numberIrregularPorts(self, packets):
         regular_ports = [1, 5, 7, 18, 20, 21, 22, 23, 25, 29, 37, 42, 43, 49, 53, 69, 70, 79, 80, 103, 108, 109, 110, 115, 118, 119, 137, 139, 143, 150, 156, 161, 179, 190, 194, 197, 389, 396, 443, 444, 445, 458, 546, 547, 563, 569, 1080] # http://www.webopedia.com/quick_ref/portnumbers.asp
@@ -142,7 +143,6 @@ class Aggregator:
 class Connection:
     def __init__(self, drivername, db_user, db_password, db_host, db_port, table_name):
         url = URL(drivername, username=db_user, password=db_password, host=db_host, port=db_port, database=table_name)
-        #Session = sessionmaker(bind=create_engine('mysql://'+user+':'+password+'@'+db_name+'/'+table_name))
         Session = sessionmaker(bind=create_engine(url))
         self.session = Session()
         

@@ -25,7 +25,7 @@ from db_schema import Packet
 def ln(x):
     if(x==0):
         return 0
-    return 1/float(x) #log(x)
+    return 1/log(x)
 
 # Wrapper around the pybrain Neural Net. Provides methods to import/export a neual net
 #  and train or classify the neural net.

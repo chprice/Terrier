@@ -38,6 +38,10 @@ This means that each scanning software will produce some number of scans (S) and
 # Evaluation
 We will measure the effectiveness by examining the rate at which we get false positives and false negatives, compared to other existing softwares. Additionally, we will compare the speed at which we detect the scan, and at what volume of traffic our software begins to slow down.
 
+# Presentation
+[Slides for the final presentation](https://docs.google.com/presentation/d/1th6rvQ79YW52-BZvkmWwdCs9tmTbjGukOMyATNWydDw/edit?usp=sharing)
+
+
 # External Links
 
 ### Libraries:
